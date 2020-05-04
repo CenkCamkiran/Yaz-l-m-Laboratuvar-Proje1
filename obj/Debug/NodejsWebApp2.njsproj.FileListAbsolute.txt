@@ -1,0 +1,3 @@
+C:\Users\Cenk\source\repos\NodejsWebApp2\NodejsWebApp2\obj\Debug\NodejsWebApp2.njsprojResolveAssemblyReference.cache
+C:\Users\Cenk\source\repos\NodejsWebApp2\NodejsWebApp2\obj\Debug\NodejsWebApp2.njsproj.CoreCompileInputs.cache
+C:\Users\Cenk\source\repos\NodejsWebApp2\NodejsWebApp2\bin\Microsoft.NodejsTools.WebRole.dll

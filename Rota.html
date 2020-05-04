@@ -1,0 +1,354 @@
+﻿<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8" />
+    <title>How to Draw Route Line Between Markers using Google Maps V3</title>
+    <style>
+        #dvMap {
+            width: 48%;
+            border: 1px solid red;
+            height: 150px;
+            float: left;
+        }
+
+        #dvMap2 {
+            width: 48%;
+            border: 1px solid blue;
+            height: 150px;
+            float: right;
+            overflow-y: scroll;
+        }
+
+        #dvMap3 {
+            width: 48%;
+            border: 1px solid blue;
+            height: 150px;
+            float: none;
+            overflow-y: scroll;
+        }
+
+        .container {
+            display: flex;
+        }
+
+        .container > div {
+            flex: 1; /*grow*/
+        }
+
+    </style>
+</head>
+<body>
+    <script type="text/javascript" src="data.json"></script>
+    <script type="text/javascript" src="http://maps.googleapis.com/maps/api/js?sensor=false"></script>
+    <script src="https://maps.googleapis.com/maps/api/js"></script>
+    <script src="https://ajax.aspnetcdn.com/ajax/jQuery/jquery-3.3.1.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.0.4/socket.io.js"></script>
+    <script type="text/javascript">
+
+        var mydata = JSON.parse(data);
+        var indirgenen;
+        var sorgu_sonucu;
+
+        var markers = mydata.map(function (location) {
+            return {
+                lat: location.lat,
+                lng: location.lng
+            };
+        });
+
+        $(document).ready(function () {
+
+            var socket = io.connect("http://localhost:1234");
+            socket.emit("Koordinatlar", mydata);
+            socket.emit("Ham Veri", markers);
+
+            socket.on("Reduction", function (data) {
+                indirgenen = data;
+                //alert(cenk.length); 2 yazdı.
+                //alert(data);
+                //alert(markers);
+                indirgenmis_hal();
+
+            });
+
+            socket.on("Ratio", function (data) {
+                $("#ratio").append("(İndirgeme Oranı : " + data + ") ");
+                //alert(data) //indirgeme oranını görüntülüyor.
+
+            });
+
+            socket.on("Sure", function (data) {
+                $("#ratio").append("(Süre : " + data + " milisaniye)");
+            });
+
+            //0. eleman min değer, 1. eleman max değer. (dizide)
+            var max_min_degerler_XY = [];
+
+            $("#btnSend").click(function () {
+                max_min_degerler_XY[0] = $("#min_X").val();
+                max_min_degerler_XY[1] = $("#max_X").val();
+                max_min_degerler_XY[2] = $("#min_Y").val();
+                max_min_degerler_XY[3] = $("#max_Y").val();
+
+                socket.emit("Sorgu", max_min_degerler_XY);
+            });
+
+            socket.on("test", function (data) { //sorguları sunucudan aldık.
+                sorgu_sonucu = data;
+                //alert(JSON.stringify(sorgu_sonucu));
+                Sorgu_Sonuc();
+
+            });
+
+            //$('#btnSend').on('click', Sorgu_Sonuc)
+
+            //$('#btnSend').click(Sorgu_Sonuc);
+
+        });
+
+        window.onload = function () {
+            var mapOptions = {
+                center: new google.maps.LatLng(markers[0].lat, markers[0].lng),
+                zoom: 10,
+                mapTypeId: google.maps.MapTypeId.ROADMAP
+            };
+            var map = new google.maps.Map(document.getElementById("dvMap"), mapOptions);
+            var infoWindow = new google.maps.InfoWindow();
+            var lat_lng = new Array();
+            var latlngbounds = new google.maps.LatLngBounds();
+            for (i = 0; i < markers.length; i++) {
+                var data = markers[i]
+                var myLatlng = new google.maps.LatLng(data.lat, data.lng);
+                lat_lng.push(myLatlng);
+                var marker = new google.maps.Marker({
+                    position: myLatlng,
+                    map: map
+                });
+                latlngbounds.extend(marker.position);
+                (function (marker, data) {
+                    google.maps.event.addListener(marker, "click", function (e) {
+                        infoWindow.setContent(data.description);
+                        infoWindow.open(map, marker);
+                    });
+                })(marker, data);
+            }
+            map.setCenter(latlngbounds.getCenter());
+            map.fitBounds(latlngbounds);
+
+            //***********ROUTING****************//
+
+            //Intialize the Path Array
+            var path = new google.maps.MVCArray();
+
+            //Intialize the Direction Service
+            var service = new google.maps.DirectionsService();
+
+            //Set the Path Stroke Color
+            var poly = new google.maps.Polyline({ map: map, strokeColor: '#4986E7' });
+
+            //Loop and Draw Path Route between the Points on MAP
+            for (var i = 0; i < lat_lng.length; i++) {
+                if ((i + 1) < lat_lng.length) {
+                    var src = lat_lng[i];
+                    var des = lat_lng[i + 1];
+                    path.push(src);
+                    poly.setPath(path);
+                    service.route({
+                        origin: src,
+                        destination: des,
+                        travelMode: google.maps.DirectionsTravelMode.DRIVING
+                    }, function (result, status) {
+                        if (status == google.maps.DirectionsStatus.OK) {
+                            for (var i = 0, len = result.routes[0].overview_path.length; i < len; i++) {
+                                path.push(result.routes[0].overview_path[i]);
+                            }
+                        }
+                    });
+                }
+            }
+        }
+
+        var geocoder;
+
+        function indirgenmis_hal() {
+
+            var mapOptions = {
+                center: new google.maps.LatLng(indirgenen[0].lat, indirgenen[0].lng),
+                zoom: 10,
+                mapTypeId: google.maps.MapTypeId.ROADMAP
+            };
+            var map = new google.maps.Map(document.getElementById("dvMap2"), mapOptions);
+            var infoWindow = new google.maps.InfoWindow();
+            var lat_lng = new Array();
+            var latlngbounds = new google.maps.LatLngBounds();
+            for (i = 0; i < indirgenen.length; i++) {
+                var data = indirgenen[i]
+                var myLatlng = new google.maps.LatLng(data.lat, data.lng);
+                lat_lng.push(myLatlng);
+                var marker = new google.maps.Marker({
+                    position: myLatlng,
+                    map: map
+                });
+                latlngbounds.extend(marker.position);
+                (function (marker, data) {
+                    google.maps.event.addListener(marker, "click", function (e) {
+                        infoWindow.setContent(data.description);
+                        infoWindow.open(map, marker);
+                    });
+                })(marker, data);
+            }
+            map.setCenter(latlngbounds.getCenter());
+            map.fitBounds(latlngbounds);
+
+            //***********ROUTING****************//
+
+            //Intialize the Path Array
+            var path = new google.maps.MVCArray();
+
+            //Intialize the Direction Service
+            var service = new google.maps.DirectionsService();
+
+            //Set the Path Stroke Color
+            var poly = new google.maps.Polyline({ map: map, strokeColor: '#4986E7' });
+
+            //Loop and Draw Path Route between the Points on MAP
+            for (var i = 0; i < lat_lng.length; i++) {
+                if ((i + 1) < lat_lng.length) {
+                    var src = lat_lng[i];
+                    var des = lat_lng[i + 1];
+                    path.push(src);
+                    poly.setPath(path);
+                    service.route({
+                        origin: src,
+                        destination: des,
+                        travelMode: google.maps.DirectionsTravelMode.DRIVING
+                    }, function (result, status) {
+                        if (status == google.maps.DirectionsStatus.OK) {
+                            for (var i = 0, len = result.routes[0].overview_path.length; i < len; i++) {
+                                path.push(result.routes[0].overview_path[i]);
+                            }
+                        }
+                    });
+                }
+            }
+
+        }
+        google.maps.event.addDomListener(window, "load", indirgenmis_hal);
+
+
+        function Sorgu_Sonuc() {
+            //alert("Cenk");
+            var mapOptions = {
+                center: new google.maps.LatLng(sorgu_sonucu[0].lat, sorgu_sonucu[0].lng),
+                zoom: 10,
+                mapTypeId: google.maps.MapTypeId.ROADMAP
+            };
+            var map = new google.maps.Map(document.getElementById("dvMap3"), mapOptions);
+            var infoWindow = new google.maps.InfoWindow();
+            var lat_lng = new Array();
+            var latlngbounds = new google.maps.LatLngBounds();
+            for (i = 0; i < sorgu_sonucu.length; i++) {
+                var data = sorgu_sonucu[i]
+                var myLatlng = new google.maps.LatLng(data.lat, data.lng);
+                lat_lng.push(myLatlng);
+                var marker = new google.maps.Marker({
+                    position: myLatlng,
+                    map: map
+                });
+                latlngbounds.extend(marker.position);
+                (function (marker, data) {
+                    google.maps.event.addListener(marker, "click", function (e) {
+                        infoWindow.setContent(data.description);
+                        infoWindow.open(map, marker);
+                    });
+                })(marker, data);
+            }
+            map.setCenter(latlngbounds.getCenter());
+            map.fitBounds(latlngbounds);
+
+            //***********ROUTING****************//
+
+            //Intialize the Path Array
+            var path = new google.maps.MVCArray();
+
+            //Intialize the Direction Service
+            var service = new google.maps.DirectionsService();
+
+            //Set the Path Stroke Color
+            var poly = new google.maps.Polyline({ map: map, strokeColor: '#4986E7' });
+
+            //Loop and Draw Path Route between the Points on MAP
+            for (var i = 0; i < lat_lng.length; i++) {
+                if ((i + 1) < lat_lng.length) {
+                    var src = lat_lng[i];
+                    var des = lat_lng[i + 1];
+                    path.push(src);
+                    poly.setPath(path);
+                    service.route({
+                        origin: src,
+                        destination: des,
+                        travelMode: google.maps.DirectionsTravelMode.DRIVING
+                    }, function (result, status) {
+                        if (status == google.maps.DirectionsStatus.OK) {
+                            for (var i = 0, len = result.routes[0].overview_path.length; i < len; i++) {
+                                path.push(result.routes[0].overview_path[i]);
+                            }
+                        }
+                    });
+                }
+            }
+
+        }
+        google.maps.event.addDomListener(document.getElementById('btnSend'), "click", Sorgu_Sonuc);
+
+    </script>
+
+    <div class="container">
+
+        <div>Ham Verinin Haritadaki Görüntüsü</div>
+        <div>Sorgu Sonucunda Gelen Verilerin Haritadaki Görüntüsü</div>
+        <div id="ratio">İndirgenen Verilerin Haritadaki Görüntüsü </div>
+
+    </div>
+
+    <div>
+        <div id="dvMap" style="width: 500px; height: 500px">
+
+        </div>
+
+        <div id="dvMap2" style="width: 500px; height: 500px">
+
+        </div>
+
+        <div id="dvMap3" style="width: 500px; height: 500px">
+
+        </div>
+
+    </div>
+
+    <form>
+        Minimum X Değeri:
+        <input type="text" id="min_X" />
+
+        <br />
+
+        Maximum X Değeri:
+        <input type="text" id="max_X" />
+        <br />
+
+        Minimum Y Değeri:
+        <input type="text" id="min_Y" />
+
+        <br />
+
+        Maximum Y Değeri:
+        <input type="text" id="max_Y" />
+        <br />
+
+        <input type="button" id="btnSend" value="Gönder" />
+        <br />
+
+    </form>
+
+</body>
+</html>
